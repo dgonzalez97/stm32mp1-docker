@@ -52,7 +52,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     screen \
     rsync \
     u-boot-tools \
+    lz4 \
+    zstd \
+    file \
     && rm -rf /var/lib/apt/lists/*
+
+    # Install zsh and oh-my-zsh
+RUN sudo apt-get update && sudo apt-get install -y zsh && \
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+
+RUN chsh -s $(which zsh) developer
+
+
 
 # Generate locales
 RUN locale-gen en_US.UTF-8
@@ -64,7 +75,8 @@ RUN useradd -m -s /bin/bash developer && \
 # Install Repo tool and set permissions
 RUN mkdir -p /home/developer/bin && \
     curl https://storage.googleapis.com/git-repo-downloads/repo > /home/developer/bin/repo && \
-    chmod a+x /home/developer/bin/repo
+    chmod a+x /home/developer/bin/repo && \
+    chown -R developer:developer /home/developer/bin
 
 # Update PATH
 ENV PATH="/home/developer/bin:${PATH}"
@@ -72,22 +84,33 @@ ENV PATH="/home/developer/bin:${PATH}"
 # Set environment variables
 ENV YOCTO_DIR=/home/developer/workdir/bytedevkit-stm32mp1/5.0
 
-# Create workdir and initialize repo
-RUN mkdir -p $YOCTO_DIR && \
-    chown -R developer:developer /home/developer
+# Create workdir and adjust permissions
+RUN mkdir -p /home/developer/workdir && \
+    chown -R developer:developer /home/developer/workdir
 
+# Declare volume for workdir
+VOLUME /home/developer/workdir
+
+# ... [Previous content of your Dockerfile]
+
+# Copy the initial-repo-setup.sh script into the image
+COPY initial-repo-setup.sh /home/developer/
+
+# Make sure the developer user owns the script
+RUN chown developer:developer /home/developer/initial-repo-setup.sh  
+RUN chmod +x initial-repo-setup.sh
 # Switch to developer user
 USER developer
 WORKDIR /home/developer
 
-# Initialize repo
-RUN cd $YOCTO_DIR && \
-    repo init -b scarthgap -u https://github.com/bytesatwork/bsp-platform-st.git && \
-    repo sync -j1 --fail-fast --retry-fetches 3
+## Enable color support and aliases
+RUN echo 'export LS_OPTIONS="--color=auto"' >> /home/developer/.bashrc && \
+echo 'eval "$(dircolors)"' >> /home/developer/.bashrc && \
+echo 'alias ls="ls $LS_OPTIONS"' >> /home/developer/.bashrc && \
+echo 'alias ll="ls $LS_OPTIONS -l"' >> /home/developer/.bashrc && \
+echo 'alias l="ls $LS_OPTIONS -lA"' >> /home/developer/.bashrc && \
+chown developer:developer /home/developer/.bashrc
 
-
-# Declare volume for workdir (this makes the workdir stable)
-VOLUME /home/developer/workdir
 
 # Default command
 CMD ["/bin/bash"]
