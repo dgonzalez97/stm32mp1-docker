@@ -22,7 +22,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nano \
     ca-certificates \
     openssh-client \
-    openssh-server \
     python3 \
     python3-pip \
     python3-pexpect \
@@ -62,16 +61,10 @@ RUN locale-gen en_US.UTF-8
 RUN useradd -m -s /bin/bash developer && \
     echo 'developer ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-# Set up SSH directory and permissions
-RUN mkdir -p /home/developer/.ssh && \
-    chmod 700 /home/developer/.ssh && \
-    chown -R developer:developer /home/developer/.ssh
-
 # Install Repo tool and set permissions
 RUN mkdir -p /home/developer/bin && \
     curl https://storage.googleapis.com/git-repo-downloads/repo > /home/developer/bin/repo && \
-    chmod a+x /home/developer/bin/repo && \
-    chown -R developer:developer /home/developer/bin
+    chmod a+x /home/developer/bin/repo
 
 # Update PATH
 ENV PATH="/home/developer/bin:${PATH}"
@@ -79,12 +72,22 @@ ENV PATH="/home/developer/bin:${PATH}"
 # Set environment variables
 ENV YOCTO_DIR=/home/developer/workdir/bytedevkit-stm32mp1/5.0
 
-# Expose SSH port (if needed)
-EXPOSE 22
+# Create workdir and initialize repo
+RUN mkdir -p $YOCTO_DIR && \
+    chown -R developer:developer /home/developer
 
 # Switch to developer user
 USER developer
 WORKDIR /home/developer
+
+# Initialize repo
+RUN cd $YOCTO_DIR && \
+    repo init -b scarthgap -u https://github.com/bytesatwork/bsp-platform-st.git && \
+    repo sync -j1 --fail-fast --retry-fetches 3
+
+
+# Declare volume for workdir (this makes the workdir stable)
+VOLUME /home/developer/workdir
 
 # Default command
 CMD ["/bin/bash"]
